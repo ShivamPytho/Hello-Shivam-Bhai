@@ -1,0 +1,376 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Support\Facades\DB;
+use App\Subject;
+use App\SubscriptionHistory;
+use App\Topic;
+use App\UserLogin;
+use JWTAuth;
+use App\User;
+use App\Chapter;
+use App\Board; 
+use App\State;
+use App\Classes;
+use App\Slides;
+use Illuminate\Http\Request;
+use Tymon\JWTAuth\Exceptions\JWTException;
+use Validator;
+use Illuminate\support\str;
+use App\Options;
+use App\Solutions;
+use App\Questions;
+use App\Result;
+
+class ExamController extends Controller
+{
+
+    private function getExamImageUrl($image){
+        // return "https://eduworm.devclub.co.in/admin/public/images/subject/$image";
+        return asset("public/uploads/images/exam.jpg");
+
+    } 
+   
+   public function ExamList(Request $request)
+   {
+      $validator =  Validator::make($request->all(), [
+            'token' => 'required',
+            'subjectId'=>'required'
+        ]);
+        if ($validator->fails()) {
+            return response()->json([
+                'result' => 'failure',
+                'message' => json_encode($validator->errors()),
+                'content' =>$content,
+            ],400);
+        }
+        $user = JWTAuth::parseToken()->authenticate();
+        $subjectId = $request->subjectId;
+        if (empty($user)){
+            return response()->json([
+                'result' => 'failure',
+                'message' => '',
+                'content' =>$content
+            ],401);
+        }
+        $subjectId = $request->input('subjectId');
+        $content = DB::table('exams')
+         ->whereRaw("find_in_set('$subjectId',sub_id)")
+         ->get();
+         foreach ($content as  $row) {
+           $row->image = $this->getExamImageUrl($row->image);
+         }
+         return response()->json([
+                'result' => 'success',
+                'message' => '',
+                'content' =>$content
+            ],200);
+
+   }
+
+   public function OpenExam(Request $request)
+   {
+       $validator =  Validator::make($request->all(), [
+            'token' => 'required',
+            'examId'=>'required'
+        ]);
+        if ($validator->fails()) {
+            return response()->json([
+                'result' => 'failure',
+                'message' => json_encode($validator->errors()),
+                'content' =>$content,
+            ],400);
+        }
+        $user = JWTAuth::parseToken()->authenticate();
+        $subjectId = $request->subjectId;
+        if (empty($user)){
+            return response()->json([
+                'result' => 'failure',
+                'message' => '',
+                'content' =>$content
+            ],401);
+        }
+        $examId = $request->input('examId');
+        $question = array();
+        $content= DB::table('exams')
+            ->select('exams.title','exams.image','instructions.h_content','instructions.e_content')
+            ->join('instructions','exams.instruction','=','instructions.id')
+            ->where(['exams.id'=>$examId])
+            ->first();
+           $content->image = $this->getExamImageUrl($content->image);
+        $exam_question =  DB::table('questions')
+            ->select('questions.*','exam_question.q_id','exam_question.marks',)
+            ->join('exam_question','questions.id','=','exam_question.q_id')
+            ->where(['exam_question.exam_id'=>$examId])
+            ->get();
+        $content->exam_question_count = count($exam_question);
+        foreach ($exam_question as $row) {
+           $options = Options::where(['q_id'=> $row->id])->get();
+           foreach ($options as  $op) {
+               $op->checked = 0;
+           }
+           $row->options = $options;
+           //  $solutions = Solutions::where(['q_id'=> $row->id])->first();
+           // $row->solutions = $solutions;
+           $row->guess = 0;
+           $row->mark = 0;
+           $row->ansType = 0;
+
+        }
+
+        $content->exam_question=$exam_question;
+         return response()->json([
+                'result' => 'success',
+                'message' => '',
+                'content' =>$content
+            ],200);
+   }
+
+   // public function SubmitExam(Request $request)
+   // {
+   //         $validator =  Validator::make($request->all(), [
+   //              'token' => 'required',
+   //              'examId'=>'required'
+   //          ]);
+   //          if ($validator->fails()) {
+   //              return response()->json([
+   //                  'result' => 'failure',
+   //                  'message' => json_encode($validator->errors()),
+   //                  'content' =>$content,
+   //              ],400);
+   //          }
+   //          $user = JWTAuth::parseToken()->authenticate();
+   //          $subjectId = $request->subjectId;
+   //          if (empty($user)){
+   //              return response()->json([
+   //                  'result' => 'failure',
+   //                  'message' => '',
+   //                  'content' =>$content
+   //              ],401);
+   //          }
+
+   //          $examId = $request->input('examId');
+   //          $exam_question =  DB::table('exam_question')
+   //          ->where(['exam_id'=>$examId])
+   //          ->count();
+   //          $total_question =  $exam_question; 
+   //          $user_id = $user->id;
+   //          $examData = json_encode($request->input('examData'));
+   //          $question = json_decode($examData);
+   //          $total_marks = $total_question*4;
+   //          $right = 0;
+   //          $arr = array();
+   //          $count1='';
+   //          $count2='';
+   //          foreach ($question as $row) {
+   //              $option = $row->options;
+
+   //              foreach ($option as $op) {
+   //                 if ($op->status = $op->correct) {
+   //                    $right = 0;  
+
+   //                 }
+   //                 else{
+   //                  $right = 1;
+   //                 }
+   //                  print_r($right);  
+   //              }
+   //             $d =implode(',',str_split($right)); 
+   //             $arr = explode(",", $d);
+   //              foreach($arr as $value){
+   //                  if($value==0){
+   //                      $count1++;  
+   //                  }else if($value==1){
+   //                      $count2++;  
+   //                  }
+   //              }  
+   //          }
+   //          $correct_question = $count2;
+   //          $incorrect_question = 0;
+   //          $marks = $correct_question*4;
+   //          $skip_question = 0;
+   //          $content = Result::create([
+   //              'user_id'=>$user_id,
+   //              'exam_id'=>$examId,
+   //              'exam_data'=>$examData,
+   //              'total_question'=>$total_question,
+   //              'correct_question'=>$correct_question,
+   //              'incorrect_question'=>$incorrect_question,
+   //              'skip_question'=>$skip_question,
+   //              'total_makrs'=>$total_marks,
+   //              'marks'=>$marks,
+   //          ]);
+   //          unset($content->user_id);
+   //          unset($content->exam_data);
+   //          return response()->json([
+   //                  'result' => 'success',
+   //                  'message' => '',
+   //                  'content' =>$content
+   //              ],200);
+
+   //  }
+
+    public function SubmitExam(Request $request)
+   {
+           $validator =  Validator::make($request->all(), [
+                'token' => 'required',
+                'examId'=>'required'
+            ]);
+            if ($validator->fails()) {
+                return response()->json([
+                    'result' => 'failure',
+                    'message' => json_encode($validator->errors()),
+                    'content' =>$content,
+                ],400);
+            }
+            $user = JWTAuth::parseToken()->authenticate();
+            $subjectId = $request->subjectId;
+            if (empty($user)){
+                return response()->json([
+                    'result' => 'failure',
+                    'message' => '',
+                    'content' =>$content
+                ],401);
+            }
+            $correct = 0;
+            $incorrect = 0;
+            $examId = $request->input('examId');
+            $exam_question =  DB::table('exam_question')
+            ->where(['exam_id'=>$examId])
+            ->count();
+            $total_question =  $exam_question; 
+            $user_id = $user->id;
+            $examData = json_encode($request->input('examData'));
+            $question = json_decode($request->input('examData'));
+
+            foreach ($question as $row) {
+                 $options = $row->options;
+                 for ($i=0; $i <count($options) ; $i++) { 
+                 if($options[$i]->checked!=1){
+
+
+                  }
+                  else if($options[$i]->checked===$options[$i]->correct){
+                  
+                    $correct++;
+                  }
+                }
+                
+            }   
+            $total_marks = $total_question*4;
+            $correct_question = $correct;
+            $incorrect_question = $incorrect;
+            $marks = $correct_question*4;
+            $skip_question = 0;
+            $content = Result::create([
+                'user_id'=>$user_id,
+                'exam_id'=>$examId,
+                'exam_data'=>$examData,
+                'total_question'=>$total_question,
+                'correct_question'=>$correct_question,
+                'incorrect_question'=>$total_question-$incorrect_question,
+                'skip_question'=>$skip_question,
+                'total_makrs'=>$total_marks,
+                'marks'=>$marks,
+            ]);
+            unset($content->user_id);
+            unset($content->exam_data);
+            $rank = Result::where(['exam_id'=>$examId])->orderBy('marks','DESC')->get();
+            $i=1;
+            $n = count($rank);
+            $content->percentile = ($content->marks)/100*$n;
+            $content->total_rank = $n;
+            foreach ($rank as $value) {
+               unset($value->exam_data);
+               $userData = User::select('name')->where(['id'=>$value->user_id])->first();
+               $value->rank = $i;
+               $value->user_name = $userData->name;
+               $value->percentile = ($value->marks)/100*2;
+               $i++;
+            }
+            // $content->rank = $rank;
+            return response()->json([
+                    'result' => 'success',
+                    'message' => '',
+                    'content' =>$content
+                ],200);
+
+    }
+
+    public function ViewParticept(Request $request)
+    {
+        $validator =  Validator::make($request->all(), [
+                'token' => 'required',
+                'examId'=>'required'
+            ]);
+            if ($validator->fails()) {
+                return response()->json([
+                    'result' => 'failure',
+                    'message' => json_encode($validator->errors()),
+                    'content' =>$content,
+                ],400);
+            }
+            $user = JWTAuth::parseToken()->authenticate();
+            $subjectId = $request->subjectId;
+            if (empty($user)){
+                return response()->json([
+                    'result' => 'failure',
+                    'message' => '',
+                    'content' =>$content
+                ],401);
+            }
+            $examId = $request->input('examId');
+            $user_id = $user->id;
+            $content = Result::where(['exam_id'=>$examId])->orderBy('marks','DESC')->get();
+            $i=1;
+            foreach ($content as $value) {
+               unset($value->exam_data);
+               $userData = User::select('name')->where(['id'=>$value->user_id])->first();
+               $value->rank = $i;
+               $value->user_name = $userData->name;
+               $value->percentile = ($value->marks)/100*2;
+               $i++;
+            }
+            return response()->json([
+                    'result' => 'success',
+                    'message' => '',
+                    'content' =>$content
+                ],200);
+
+    }
+
+    public function review_question(Request $request)
+    {
+        $validator =  Validator::make($request->all(), [
+                'token' => 'required',
+                'examId'=>'required'
+            ]);
+            if ($validator->fails()) {
+                return response()->json([
+                    'result' => 'failure',
+                    'message' => json_encode($validator->errors()),
+                    'content' =>$content,
+                ],400);
+            }
+            $user = JWTAuth::parseToken()->authenticate();
+            $subjectId = $request->subjectId;
+            if (empty($user)){
+                return response()->json([
+                    'result' => 'failure',
+                    'message' => '',
+                    'content' =>$content
+                ],401);
+            }
+
+            $examId = $request->input('examId');
+            $user_id = $user->id;
+            $content = Result::where(['exam_id'=>$examId,'user_id'=>$user_id])->get();
+            return response()->json([
+                    'result' => 'success',
+                    'message' => '',
+                    'content' =>$content
+                ],200);
+
+    }
+}
